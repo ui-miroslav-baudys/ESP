@@ -267,7 +267,10 @@ static esp_err_t cdc_open_if_needed(void) {
 
     static bool usb_host_ready = false;
     if (!usb_host_ready) {
-        usb_host_config_t host_cfg = {0};
+        usb_host_config_t host_cfg = {
+            .skip_phy_setup = false,
+            .intr_flags = ESP_INTR_FLAG_LEVEL1,
+        };
         ESP_ERROR_CHECK(usb_host_install(&host_cfg));
         usb_host_ready = true;
         ESP_LOGI(TAG, "USB Host installiert");
@@ -535,6 +538,22 @@ static void net_watchdog_task(void* arg) {
 #endif
 }
 
+static void usb_device_watchdog_task(void* arg) {
+#if APP_USB_WATCH_DOG_S == 0
+    vTaskDelete(NULL);
+#else
+    TickType_t last_ok = xTaskGetTickCount();
+    for (;;) {
+        if (s_cdc) last_ok = xTaskGetTickCount();
+        if ((xTaskGetTickCount() - last_ok) > pdMS_TO_TICKS((APP_USB_WATCH_DOG_S)*1000)) {
+            ESP_LOGE(TAG, "No USB device for %d s → reboot", APP_USB_WATCH_DOG_S);
+            esp_restart();
+        }
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
+#endif
+}
+
 static void tcp_server_task(void *arg) {
     int listenfd = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
     if (listenfd < 0) { ESP_LOGE(TAG, "socket()"); vTaskDelete(NULL); return; }
@@ -631,6 +650,7 @@ void app_main(void) {
     xTaskCreatePinnedToCore(usb_keeper_task, "usb_keeper", 4096, NULL, 7, NULL, 0);
     xTaskCreatePinnedToCore(tcp_server_task, "tcp_server_task", 6144, NULL, 6, NULL, 1);
     xTaskCreatePinnedToCore(net_watchdog_task, "net_wd", 3072, NULL, 5, NULL, 0);
+    xTaskCreatePinnedToCore(usb_device_watchdog_task, "usb_dev_wd", 3072, NULL, 5, NULL, 0);
 
     ESP_LOGI(TAG, "Boot OK — ESP32-S3 RTU-over-TCP Bridge läuft");
 }

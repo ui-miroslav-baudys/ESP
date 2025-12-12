@@ -32,6 +32,10 @@
 // 0 = Watchdog aus
 #define APP_NET_WATCHDOG_S      60
 
+// USB-Dev Watchdog
+// 0 = disable
+#define APP_USB_WATCH_DOG_S		10
+
 // mDNS
 #define APP_MDNS_ENABLE      1
 #define APP_MDNS_INSTANCE    "Meltem RTU Bridge"
